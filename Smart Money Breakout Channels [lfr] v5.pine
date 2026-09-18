@@ -1,0 +1,143 @@
+//**@version=**5
+
+indicator("Smart Money Breakout Channels [lfr] v5", overlay=true, max_boxes_count=500)
+
+overlap = input.bool(false, "Nested Channels", group="Main Settings")
+
+strong  = input.bool(true,  "Strong Closes Only", group="Main Settings")
+
+length_ = input.int(100, "Normalization Length", minval=1, group="Main Settings")
+
+length  = input.int(14,  "Box Detection Length", minval=1, group="Main Settings")
+
+green = input.color(#00ffbb, title="Bullish Color", group="Appearance")
+
+red  = input.color(#ff1100, title="Bearish Color", group="Appearance")
+
+var boxes    = array.new<**box**>()
+
+var boxes_u   = array.new<**box**>()
+
+var boxes_l   = array.new<**box**>()
+
+var centerLines = array.new<**line**>()
+
+// price normalization
+
+lowestLow   = ta.lowest(low, length_)
+
+highestHigh  = ta.highest(high, length_)
+
+normalizedPrice = (close - lowestLow) / (highestHigh - lowestLow)
+
+vol = ta.stdev(normalizedPrice, 14)
+
+upper = (ta.highestbars(vol, length + 1) + length) / length
+
+lower = (ta.lowestbars(vol, length + 1) + length) / length
+
+duration = math.max(nz(ta.barssince(ta.crossover(lower, upper))), 1)
+
+h = ta.highest(duration)
+
+l = ta.lowest(duration)
+
+upbreak  = 0.0
+
+downbreak = 0.0
+
+newChannelFormed = false
+
+bullishBreakout  = false
+
+bearishBreakout  = false
+
+// create new channel
+
+if ta.crossover(upper, lower) and duration > 10
+
+  **bool** canCreate = true
+
+  if boxes.size() > 0
+
+​    for j = 0 to boxes.size() - 1
+
+​      b = boxes.get(j)
+
+​      if (h > b.get_bottom()) and (l < b.get_top())
+
+​        canCreate := false
+
+  if overlap or canCreate
+
+​    boxes.unshift(box.new(bar_index - duration, h, bar_index, l, bgcolor=color.new(color.gray, 90), border_color=na))
+
+​    vola = ta.atr(length) / 2
+
+​    boxes_u.unshift(box.new(bar_index - duration, h, bar_index, h - vola, bgcolor=color.new(red, 70), border_color=na))
+
+​    boxes_l.unshift(box.new(bar_index - duration, l + vola, bar_index, l, bgcolor=color.new(green, 70), border_color=na))
+
+​    centerY = (h + l) / 2
+
+​    centerLines.unshift(line.new(bar_index - duration, centerY, bar_index, centerY, color=color.new(color.gray, 50), width=1, style=line.style_dashed))
+
+​    newChannelFormed := true
+
+// update and breakout
+
+if boxes.size() > 0
+
+  for i = 0 to boxes.size() - 1
+
+​    midClose = (open + close) / 2
+
+​    refPrice = strong ? midClose : close
+
+​    if refPrice > boxes.get(i).get_top()
+
+​      upbreak := boxes.get(i).get_bottom()
+
+​      boxes.remove(i)
+
+​      boxes_u.remove(i)
+
+​      boxes_l.remove(i)
+
+​      centerLines.remove(i)
+
+​      bullishBreakout := true
+
+​    else if refPrice < boxes.get(i).get_bottom()
+
+​      downbreak := boxes.get(i).get_top()
+
+​      boxes.remove(i)
+
+​      boxes_u.remove(i)
+
+​      boxes_l.remove(i)
+
+​      centerLines.remove(i)
+
+​      bearishBreakout := true
+
+​    else
+
+​      boxes.get(i).set_right(bar_index)
+
+​      boxes_u.get(i).set_right(bar_index)
+
+​      boxes_l.get(i).set_right(bar_index)
+
+​      centerLines.get(i).set_x2(bar_index)
+
+plotshape(upbreak != 0 ? upbreak : na, "Bullish Breakout", shape.labelup, location.absolute, color=green, text="BULL", textcolor=color.white, size=size.small)
+
+plotshape(downbreak != 0 ? downbreak : na, "Bearish Breakout", shape.labeldown, location.absolute, color=red, text="BEAR", textcolor=color.white, size=size.small)
+
+alertcondition(newChannelFormed, "New Channel", "A new breakout channel has formed")
+
+alertcondition(bullishBreakout, "Bullish Breakout", "Price broke above channel")
+
+alertcondition(bearishBreakout, "Bearish Breakout", "Price broke below channel")
